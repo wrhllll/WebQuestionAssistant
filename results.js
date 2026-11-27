@@ -1085,6 +1085,28 @@ addQuestionModeButton.addEventListener("click", () => {
   }
 });
 
+function createLocalizationImageData(sourceImage) {
+  const maxWidth = 1280;
+  const maxHeight = 4096;
+  const scale = Math.min(
+    1,
+    maxWidth / Math.max(1, sourceImage.naturalWidth),
+    maxHeight / Math.max(1, sourceImage.naturalHeight)
+  );
+  if (scale >= 0.99) {
+    return record.imageData;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceImage.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceImage.naturalHeight * scale));
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    return record.imageData;
+  }
+  context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.78);
+}
+
 async function recognizeAndCrop(api, signal) {
   setEditorAddMode(false);
   await saveRecord({
@@ -1092,6 +1114,8 @@ async function recognizeAndCrop(api, signal) {
     error: "",
     activeQuestionId: ""
   });
+  await prepareCropEditorImage();
+  const localizationImage = createLocalizationImageData(editorSourceImage);
   const response = await chatCompletion(api, [
     {
       type: "text",
@@ -1106,10 +1130,9 @@ async function recognizeAndCrop(api, signal) {
         "没有题目时返回 {\"questions\":[]}。"
       ].join("\n")
     },
-    { type: "image_url", image_url: { url: record.imageData } }
+    { type: "image_url", image_url: { url: localizationImage } }
   ], signal);
   const segments = parseSegments(response, record.width, record.height);
-  await prepareCropEditorImage();
   const sourceImage = editorSourceImage;
   const crops = [];
   for (let index = 0; index < segments.length; index += 1) {
@@ -1498,6 +1521,11 @@ async function loadRecord() {
     if (record.status === "captured") {
       if (initialMode === "local" || record.mode === "local") {
         await applyLocalDetections();
+      } else if (Array.isArray(record.localDetections) && record.localDetections.length > 0) {
+        await applyLocalDetections();
+        if (record.questions?.length > 0) {
+          setStatus(`已在本地秒级框选出 ${record.questions.length} 道题目（跳过耗时的整页视觉定位）。检查后点击“确认并逐题求解”，或点击“重新识别”改用视觉模型。`);
+        }
       } else {
         await startRecognition();
       }
