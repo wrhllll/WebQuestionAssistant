@@ -1,17 +1,23 @@
 const statusElement = document.getElementById("status");
 const settingsButton = document.getElementById("open-settings");
 const captureButton = document.getElementById("capture-page");
+const detailedPanel = document.getElementById("popup-detailed-panel");
 const modeRadios = [...document.querySelectorAll('input[name="popup-mode"]')];
 const localBar = document.getElementById("popup-local-bar");
+const aiBar = document.getElementById("popup-ai-bar");
+const activeProfileEl = document.getElementById("popup-active-profile");
+const instructionInput = document.getElementById("popup-instruction");
 const autoDownloadCheckbox = document.getElementById("popup-auto-download");
 const formatPngCheckbox = document.getElementById("popup-format-png");
 const formatPdfCheckbox = document.getElementById("popup-format-pdf");
 const openEditorLink = document.getElementById("open-editor-link");
 
 let captureInProgress = false;
+let popupUiMode = "minimal";
 let workflowMode = "ai";
 let autoDownloadInLocal = true;
 let exportFormats = ["png"];
+let activeProfile = null;
 let lastResultId = "";
 
 function setStatus(message, isError = false) {
@@ -20,12 +26,27 @@ function setStatus(message, isError = false) {
 }
 
 function updateControlsUi() {
+  const isDetailed = popupUiMode === "detailed";
+  if (detailedPanel) {
+    detailedPanel.hidden = !isDetailed;
+  }
   for (const radio of modeRadios) {
     radio.checked = radio.value === workflowMode;
     radio.disabled = captureInProgress;
   }
   if (localBar) {
-    localBar.hidden = workflowMode !== "local";
+    localBar.hidden = !isDetailed || workflowMode !== "local";
+  }
+  if (aiBar) {
+    aiBar.hidden = !isDetailed || workflowMode !== "ai";
+  }
+  if (activeProfileEl && isDetailed && workflowMode === "ai") {
+    activeProfileEl.textContent = activeProfile
+      ? `当前 API：${activeProfile.name}（${activeProfile.model || "未填模型"}）`
+      : "尚未配置 API，请先点击右上角“设置”。";
+  }
+  if (instructionInput) {
+    instructionInput.disabled = captureInProgress;
   }
   if (autoDownloadCheckbox) {
     autoDownloadCheckbox.checked = autoDownloadInLocal;
@@ -52,10 +73,12 @@ async function loadPopupPrefs() {
     return;
   }
   const saved = await chrome.storage.local.get([
+    "popupUiMode",
     "defaultWorkflowMode",
     "autoDownloadInLocal",
     "exportFormats"
   ]);
+  popupUiMode = saved.popupUiMode === "detailed" ? "detailed" : "minimal";
   workflowMode = saved.defaultWorkflowMode === "local" ? "local" : "ai";
   autoDownloadInLocal = saved.autoDownloadInLocal !== false;
   if (Array.isArray(saved.exportFormats) && saved.exportFormats.length > 0) {
@@ -63,6 +86,9 @@ async function loadPopupPrefs() {
     if (valid.length > 0) {
       exportFormats = valid;
     }
+  }
+  if (typeof ApiProfiles !== "undefined" && ApiProfiles.getActiveProfile) {
+    activeProfile = await ApiProfiles.getActiveProfile().catch(() => null);
   }
   updateControlsUi();
 }
@@ -180,6 +206,13 @@ captureButton.addEventListener("click", async () => {
         }
         return;
       }
+    }
+
+    const instruction = popupUiMode === "detailed" && workflowMode === "ai" && instructionInput
+      ? instructionInput.value.trim()
+      : "";
+    if (instruction && typeof ResultStore !== "undefined" && ResultStore.update) {
+      await ResultStore.update(result.resultId, { instruction }).catch(() => {});
     }
 
     const resultUrl = chrome.runtime.getURL("results.html") +

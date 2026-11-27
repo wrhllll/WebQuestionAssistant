@@ -1018,6 +1018,26 @@ button:disabled {
   display: none;
 }
 
+.popup-detailed-panel[hidden],
+.popup-ai-bar[hidden] {
+  display: none;
+}
+
+.popup-ai-bar {
+  margin-top: 8px;
+}
+
+.popup-instruction-label {
+  margin: 6px 0 4px;
+  font-size: 12px;
+  color: #57606a;
+}
+
+.popup-instruction {
+  min-height: 52px;
+  font-size: 13px;
+}
+
 .reasoning-panel {
   margin: 10px 0 12px;
 }

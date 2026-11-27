@@ -13,6 +13,7 @@ const clearKeyButton = document.getElementById("clear-key");
 const cancelEditButton = document.getElementById("cancel-edit");
 const statusElement = document.getElementById("settings-status");
 const modeRadios = [...document.querySelectorAll('input[name="default-mode"]')];
+const popupUiRadios = [...document.querySelectorAll('input[name="popup-ui-mode"]')];
 const localDownloadOptions = document.getElementById("local-auto-download-options");
 const autoDownloadLocalCheckbox = document.getElementById("auto-download-local");
 const formatPngCheckbox = document.getElementById("format-png");
@@ -22,6 +23,7 @@ const updateText = document.getElementById("update-text");
 const updateDownloadButton = document.getElementById("update-download");
 const updateDismissButton = document.getElementById("update-dismiss");
 let pendingUpdate = null;
+let popupUiMode = "minimal";
 let autoDownloadInLocal = true;
 let exportFormats = ["png"];
 
@@ -206,6 +208,9 @@ function renderProfiles() {
 }
 
 function renderModeSelection() {
+  for (const radio of popupUiRadios) {
+    radio.checked = radio.value === popupUiMode;
+  }
   for (const radio of modeRadios) {
     radio.checked = radio.value === currentState.defaultWorkflowMode;
   }
@@ -226,9 +231,10 @@ function renderModeSelection() {
 async function refreshState() {
   const [state, extra] = await Promise.all([
     ApiProfiles.loadState(),
-    chrome.storage.local.get(["autoDownloadInLocal", "exportFormats"])
+    chrome.storage.local.get(["popupUiMode", "autoDownloadInLocal", "exportFormats"])
   ]);
   currentState = state;
+  popupUiMode = extra.popupUiMode === "detailed" ? "detailed" : "minimal";
   autoDownloadInLocal = extra.autoDownloadInLocal !== false;
   if (Array.isArray(extra.exportFormats) && extra.exportFormats.length > 0) {
     const valid = extra.exportFormats.filter((f) => f === "png" || f === "pdf");
@@ -294,6 +300,23 @@ clearKeyButton.addEventListener("click", async () => {
     setStatus(`清除 API Key 失败：${error?.message || "请稍后重试。"}`, true);
   }
 });
+
+for (const radio of popupUiRadios) {
+  radio.addEventListener("change", async () => {
+    if (!radio.checked) {
+      return;
+    }
+    popupUiMode = radio.value === "detailed" ? "detailed" : "minimal";
+    try {
+      await chrome.storage.local.set({ popupUiMode });
+      setStatus(popupUiMode === "detailed"
+        ? "弹窗界面已切换为：详细版。"
+        : "弹窗界面已切换为：极简原版。");
+    } catch {
+      setStatus("保存弹窗风格失败。", true);
+    }
+  });
+}
 
 for (const radio of modeRadios) {
   radio.addEventListener("change", async () => {
