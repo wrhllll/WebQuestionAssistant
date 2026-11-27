@@ -1012,3 +1012,31 @@ button:disabled {
 .popup-editor-link[hidden] {
   display: none;
 }
+
+.reasoning-panel {
+  margin: 10px 0 12px;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  background: #f6f8fa;
+}
+
+.reasoning-panel summary {
+  padding: 7px 12px;
+  color: #57606a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.reasoning-body {
+  border-top: 1px solid #d8dee4;
+  padding: 10px 12px;
+  color: #57606a;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow-y: auto;
+}
