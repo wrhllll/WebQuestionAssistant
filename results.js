@@ -156,9 +156,13 @@ function createQuestionCard(question, index) {
       reasoningPanel.open = true;
     }
     const summary = document.createElement("summary");
-    summary.textContent = question.status === "solving" && !question.answer
-      ? "思考中…"
-      : "查看思考过程";
+    if (question.status === "solving" && !question.answer) {
+      summary.textContent = "思考中…";
+    } else if (Number.isFinite(question.reasoningSeconds) && question.reasoningSeconds > 0) {
+      summary.textContent = `已深度思考（用时 ${question.reasoningSeconds} 秒）`;
+    } else {
+      summary.textContent = "已深度思考";
+    }
     const reasoningBody = document.createElement("div");
     reasoningBody.className = "reasoning-body";
     reasoningBody.textContent = question.reasoning;
@@ -1413,6 +1417,9 @@ async function solveQuestions(api, signal, questionIds) {
     );
     let reasoningCollapsedByAnswer = false;
     let userToggledReasoning = false;
+    let userScrolledReasoningUp = false;
+    let reasoningStartedAt = 0;
+    let reasoningDurationSec = 0;
 
     const updateLiveStreamDom = ({ answer, reasoning }) => {
       const host = document.querySelector(`.live-stream-host[data-live-question="${CSS.escape(question.id)}"]`);
@@ -1420,10 +1427,13 @@ async function solveQuestions(api, signal, questionIds) {
         return;
       }
       if (reasoning) {
+        if (!reasoningStartedAt) {
+          reasoningStartedAt = Date.now();
+        }
         let panel = host.querySelector(".reasoning-panel");
         if (!panel) {
           panel = document.createElement("details");
-          panel.className = "reasoning-panel";
+          panel.className = "reasoning-panel is-streaming";
           panel.open = !answer;
           panel.addEventListener("toggle", () => {
             if (panel.dataset.programmatic === "1") {
@@ -1434,19 +1444,33 @@ async function solveQuestions(api, signal, questionIds) {
           const summary = document.createElement("summary");
           const body = document.createElement("div");
           body.className = "reasoning-body";
+          body.addEventListener("scroll", () => {
+            const distanceToBottom = body.scrollHeight - body.scrollTop - body.clientHeight;
+            userScrolledReasoningUp = distanceToBottom > 28;
+          });
           panel.append(summary, body);
           host.prepend(panel);
         }
         const summary = panel.querySelector("summary");
         const body = panel.querySelector(".reasoning-body");
+        if (answer && !reasoningDurationSec) {
+          reasoningDurationSec = Math.max(1, Math.round((Date.now() - reasoningStartedAt) / 1000));
+        }
+        const liveSec = Math.max(0, Math.floor((Date.now() - reasoningStartedAt) / 1000));
         if (summary) {
-          summary.textContent = answer ? "查看思考过程" : "思考中…";
+          summary.textContent = answer
+            ? `已深度思考（用时 ${reasoningDurationSec} 秒）`
+            : `思考中… ${liveSec}s`;
         }
         if (body) {
           body.textContent = reasoning;
+          if (!userScrolledReasoningUp && panel.open) {
+            body.scrollTop = body.scrollHeight;
+          }
         }
         if (answer && !reasoningCollapsedByAnswer && !userToggledReasoning) {
           reasoningCollapsedByAnswer = true;
+          panel.classList.remove("is-streaming");
           panel.dataset.programmatic = "1";
           panel.open = false;
           delete panel.dataset.programmatic;
@@ -1486,16 +1510,21 @@ async function solveQuestions(api, signal, questionIds) {
       stopWaitTimer();
       const rawAnswer = typeof solved === "string" ? solved : solved.answer;
       const rawReasoning = typeof solved === "string" ? "" : (solved.reasoning || "");
+      const finalReasoningSec = rawReasoning
+        ? (reasoningDurationSec || (reasoningStartedAt ? Math.max(1, Math.round((Date.now() - reasoningStartedAt) / 1000)) : 0))
+        : 0;
       const qualityCheck = parseCropQualityFlag(rawAnswer);
       if (qualityCheck.flagged) {
         question.status = "needs_recrop";
         question.answer = "";
         question.reasoning = rawReasoning;
+        question.reasoningSeconds = finalReasoningSec;
         question.error = qualityCheck.message;
       } else {
         question.status = "complete";
         question.answer = rawAnswer;
         question.reasoning = rawReasoning;
+        question.reasoningSeconds = finalReasoningSec;
         question.error = "";
         question.completedAt = Date.now();
       }

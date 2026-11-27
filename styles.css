@@ -1020,28 +1020,36 @@ button:disabled {
 
 .reasoning-panel {
   margin: 10px 0 12px;
-  border: 1px solid #d8dee4;
-  border-radius: 6px;
-  background: #f6f8fa;
 }
 
 .reasoning-panel summary {
-  padding: 7px 12px;
-  color: #57606a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #4b5563;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   user-select: none;
 }
 
+.reasoning-panel summary:hover {
+  background: #e5e7eb;
+}
+
 .reasoning-body {
-  border-top: 1px solid #d8dee4;
-  padding: 10px 12px;
-  color: #57606a;
+  margin: 8px 0 0 6px;
+  padding: 2px 12px 4px 14px;
+  border-left: 2px solid #d0d7de;
+  color: #6e7781;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 320px;
+  max-height: 240px;
   overflow-y: auto;
+  scroll-behavior: auto;
 }
