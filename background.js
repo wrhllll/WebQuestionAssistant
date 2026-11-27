@@ -305,10 +305,15 @@ async function captureFullPage(tabId, windowId, task) {
 
         const actualX = metrics.scrollX;
         const actualY = metrics.scrollY;
-        if (currentX > actualX + 2 || currentY > actualY + 2) {
-          throw new Error("页面未能滚动到指定位置，长截图已停止。");
+        const hitRightLimit = currentX > actualX + 2;
+        const hitBottomLimit = currentY > actualY + 2;
+        if (hitRightLimit) {
+          pageWidth = Math.max(coveredWidth, actualX + viewportWidth);
         }
-        if (currentX > 0 && Math.abs(actualY - rowScrollY) > 2) {
+        if (hitBottomLimit) {
+          pageHeight = Math.max(coveredHeight, actualY + viewportHeight);
+        }
+        if (currentX > 0 && Math.abs(actualY - rowScrollY) > 4) {
           throw new Error("页面滚动位置发生变化，长截图已停止。");
         }
         if (currentX === 0) {
@@ -352,8 +357,10 @@ async function captureFullPage(tabId, windowId, task) {
           const scaleY = bitmap.height / viewportHeight;
           const cropLeft = Math.min(viewportWidth, Math.max(0, coveredWidth - actualX));
           const cropTop = Math.min(viewportHeight, Math.max(0, coveredHeight - actualY));
-          const cropRight = actualX + viewportWidth >= pageWidth - 1 ? 0 : overlapX;
-          const cropBottom = actualY + viewportHeight >= pageHeight - 1 ? 0 : overlapY;
+          const isLastColumn = hitRightLimit || actualX + viewportWidth >= pageWidth - 2;
+          const isLastRow = hitBottomLimit || actualY + viewportHeight >= pageHeight - 2;
+          const cropRight = isLastColumn ? 0 : overlapX;
+          const cropBottom = isLastRow ? 0 : overlapY;
           const destinationX = Math.max(coveredWidth, actualX);
           const destinationY = Math.max(coveredHeight, actualY);
           const destinationWidth = Math.min(
@@ -393,27 +400,24 @@ async function captureFullPage(tabId, windowId, task) {
         reportProgress(tiles, estimatedColumns * estimatedRows);
 
         const maxX = Math.max(0, pageWidth - viewportWidth);
-        if (coveredWidth >= pageWidth || actualX >= maxX - 1) {
-          if (coveredWidth < pageWidth - 1) {
-            throw new Error("页面横向滚动区域无法完整采集。");
-          }
+        if (hitRightLimit || coveredWidth >= pageWidth - 2 || actualX >= maxX - 2) {
           break;
         }
         const nextX = Math.min(actualX + stepX, maxX);
         if (nextX <= actualX) {
-          throw new Error("页面横向滚动没有进展，长截图已停止。");
+          break;
         }
         currentX = nextX;
       }
 
       coveredHeight = Math.max(coveredHeight, rowCoveredHeight);
-      if (coveredHeight >= pageHeight) {
+      if (coveredHeight >= pageHeight - 2) {
         break;
       }
       const maxY = Math.max(0, pageHeight - viewportHeight);
       const nextY = Math.min(rowScrollY + stepY, maxY);
       if (nextY <= rowScrollY) {
-        throw new Error("页面纵向滚动没有进展，长截图已停止。");
+        break;
       }
       currentY = nextY;
     }
