@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "网页题目助手",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "网页题目自动框选、AI 识别解答与本地 PNG/PDF 导出。",
   "permissions": [
     "activeTab",

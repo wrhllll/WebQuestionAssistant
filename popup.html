@@ -12,8 +12,34 @@
         <h1>网页题目助手</h1>
         <button id="open-settings" class="text-button" type="button">设置</button>
       </header>
+      <div class="popup-segmented" role="radiogroup" aria-label="默认工作模式">
+        <label class="popup-segment">
+          <input type="radio" name="popup-mode" value="local">
+          <span>本地导出</span>
+        </label>
+        <label class="popup-segment">
+          <input type="radio" name="popup-mode" value="ai">
+          <span>AI 解答</span>
+        </label>
+      </div>
+      <div id="popup-local-bar" class="popup-local-bar" hidden>
+        <label class="popup-inline-opt">
+          <input id="popup-auto-download" type="checkbox" checked>
+          <span>直接下载</span>
+        </label>
+        <span class="popup-bar-sep" aria-hidden="true">·</span>
+        <label class="popup-inline-opt">
+          <input id="popup-format-png" type="checkbox" value="png" checked>
+          <span>PNG</span>
+        </label>
+        <label class="popup-inline-opt">
+          <input id="popup-format-pdf" type="checkbox" value="pdf">
+          <span>PDF</span>
+        </label>
+      </div>
       <button id="capture-page" class="primary-button capture-primary" type="button">截取网页长图</button>
       <p id="status" class="status" role="status" aria-live="polite"></p>
+      <a id="open-editor-link" class="popup-editor-link" href="#" hidden>需要微调？打开编辑页</a>
     </main>
     <script src="exporter.js"></script>
     <script src="popup.js"></script>

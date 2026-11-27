@@ -22,7 +22,7 @@ const updateText = document.getElementById("update-text");
 const updateDownloadButton = document.getElementById("update-download");
 const updateDismissButton = document.getElementById("update-dismiss");
 let pendingUpdate = null;
-let autoDownloadInLocal = false;
+let autoDownloadInLocal = true;
 let exportFormats = ["png"];
 
 let currentState = {
@@ -229,7 +229,7 @@ async function refreshState() {
     chrome.storage.local.get(["autoDownloadInLocal", "exportFormats"])
   ]);
   currentState = state;
-  autoDownloadInLocal = Boolean(extra.autoDownloadInLocal);
+  autoDownloadInLocal = extra.autoDownloadInLocal !== false;
   if (Array.isArray(extra.exportFormats) && extra.exportFormats.length > 0) {
     const valid = extra.exportFormats.filter((f) => f === "png" || f === "pdf");
     exportFormats = valid.length > 0 ? valid : ["png"];
