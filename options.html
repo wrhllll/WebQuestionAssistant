@@ -24,11 +24,11 @@
         <div class="mode-switcher" role="radiogroup" aria-label="弹窗界面风格">
           <label class="mode-option">
             <input type="radio" name="popup-ui-mode" value="minimal">
-            <span>极简原版（仅保留主按钮与设置）</span>
+            <span>极简原版（仅保留主按钮，截完跳转结果页）</span>
           </label>
           <label class="mode-option">
             <input type="radio" name="popup-ui-mode" value="detailed">
-            <span>详细版（弹窗内快捷切换模式、格式与补充说明）</span>
+            <span>详细版（本地导出直接下载，AI 解答跳转结果页）</span>
           </label>
         </div>
       </section>
@@ -46,12 +46,8 @@
           </label>
         </div>
         <div id="local-auto-download-options" class="local-download-options" hidden>
-          <label class="inline-check">
-            <input id="auto-download-local" type="checkbox">
-            <span>不进入预览与微调页（截完直接自动下载）</span>
-          </label>
           <div class="format-picker">
-            <span class="format-label">自动下载格式（可多选）：</span>
+            <span class="format-label">详细版直接下载格式（可多选）：</span>
             <label class="format-option">
               <input id="format-png" type="checkbox" value="png" checked>
               <span>合并 PNG</span>

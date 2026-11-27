@@ -15,7 +15,6 @@ const statusElement = document.getElementById("settings-status");
 const modeRadios = [...document.querySelectorAll('input[name="default-mode"]')];
 const popupUiRadios = [...document.querySelectorAll('input[name="popup-ui-mode"]')];
 const localDownloadOptions = document.getElementById("local-auto-download-options");
-const autoDownloadLocalCheckbox = document.getElementById("auto-download-local");
 const formatPngCheckbox = document.getElementById("format-png");
 const formatPdfCheckbox = document.getElementById("format-pdf");
 const updateBanner = document.getElementById("update-banner");
@@ -24,7 +23,6 @@ const updateDownloadButton = document.getElementById("update-download");
 const updateDismissButton = document.getElementById("update-dismiss");
 let pendingUpdate = null;
 let popupUiMode = "minimal";
-let autoDownloadInLocal = true;
 let exportFormats = ["png"];
 
 let currentState = {
@@ -215,10 +213,7 @@ function renderModeSelection() {
     radio.checked = radio.value === currentState.defaultWorkflowMode;
   }
   if (localDownloadOptions) {
-    localDownloadOptions.hidden = currentState.defaultWorkflowMode !== "local";
-  }
-  if (autoDownloadLocalCheckbox) {
-    autoDownloadLocalCheckbox.checked = autoDownloadInLocal;
+    localDownloadOptions.hidden = currentState.defaultWorkflowMode !== "local" || popupUiMode !== "detailed";
   }
   if (formatPngCheckbox) {
     formatPngCheckbox.checked = exportFormats.includes("png");
@@ -231,11 +226,10 @@ function renderModeSelection() {
 async function refreshState() {
   const [state, extra] = await Promise.all([
     ApiProfiles.loadState(),
-    chrome.storage.local.get(["popupUiMode", "autoDownloadInLocal", "exportFormats"])
+    chrome.storage.local.get(["popupUiMode", "exportFormats"])
   ]);
   currentState = state;
   popupUiMode = extra.popupUiMode === "detailed" ? "detailed" : "minimal";
-  autoDownloadInLocal = extra.autoDownloadInLocal !== false;
   if (Array.isArray(extra.exportFormats) && extra.exportFormats.length > 0) {
     const valid = extra.exportFormats.filter((f) => f === "png" || f === "pdf");
     exportFormats = valid.length > 0 ? valid : ["png"];
@@ -309,9 +303,10 @@ for (const radio of popupUiRadios) {
     popupUiMode = radio.value === "detailed" ? "detailed" : "minimal";
     try {
       await chrome.storage.local.set({ popupUiMode });
+      renderModeSelection();
       setStatus(popupUiMode === "detailed"
-        ? "弹窗界面已切换为：详细版。"
-        : "弹窗界面已切换为：极简原版。");
+        ? "弹窗界面已切换为：详细版（本地导出直接下载，AI 解答跳转结果页）。"
+        : "弹窗界面已切换为：极简原版（仅保留跳转结果页）。");
     } catch {
       setStatus("保存弹窗风格失败。", true);
     }
@@ -332,20 +327,6 @@ for (const radio of modeRadios) {
         : "默认模式已设为：AI 视觉识别与逐题解答。");
     } catch (error) {
       setStatus(`保存默认模式失败：${error?.message || "请稍后重试。"}`, true);
-    }
-  });
-}
-
-if (autoDownloadLocalCheckbox) {
-  autoDownloadLocalCheckbox.addEventListener("change", async () => {
-    autoDownloadInLocal = autoDownloadLocalCheckbox.checked;
-    try {
-      await chrome.storage.local.set({ autoDownloadInLocal });
-      setStatus(autoDownloadInLocal
-        ? "已开启：本地模式截完直接自动下载（不跳微调页）。"
-        : "已关闭直接自动下载，截完后将进入微调页。");
-    } catch {
-      setStatus("保存自动下载设置失败。", true);
     }
   });
 }

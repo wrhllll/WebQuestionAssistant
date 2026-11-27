@@ -7,7 +7,6 @@ const localBar = document.getElementById("popup-local-bar");
 const aiBar = document.getElementById("popup-ai-bar");
 const activeProfileEl = document.getElementById("popup-active-profile");
 const instructionInput = document.getElementById("popup-instruction");
-const autoDownloadCheckbox = document.getElementById("popup-auto-download");
 const formatPngCheckbox = document.getElementById("popup-format-png");
 const formatPdfCheckbox = document.getElementById("popup-format-pdf");
 const openEditorLink = document.getElementById("open-editor-link");
@@ -15,7 +14,6 @@ const openEditorLink = document.getElementById("open-editor-link");
 let captureInProgress = false;
 let popupUiMode = "minimal";
 let workflowMode = "ai";
-let autoDownloadInLocal = true;
 let exportFormats = ["png"];
 let activeProfile = null;
 let lastResultId = "";
@@ -48,10 +46,6 @@ function updateControlsUi() {
   if (instructionInput) {
     instructionInput.disabled = captureInProgress;
   }
-  if (autoDownloadCheckbox) {
-    autoDownloadCheckbox.checked = autoDownloadInLocal;
-    autoDownloadCheckbox.disabled = captureInProgress;
-  }
   if (formatPngCheckbox) {
     formatPngCheckbox.checked = exportFormats.includes("png");
     formatPngCheckbox.disabled = captureInProgress;
@@ -75,12 +69,10 @@ async function loadPopupPrefs() {
   const saved = await chrome.storage.local.get([
     "popupUiMode",
     "defaultWorkflowMode",
-    "autoDownloadInLocal",
     "exportFormats"
   ]);
   popupUiMode = saved.popupUiMode === "detailed" ? "detailed" : "minimal";
   workflowMode = saved.defaultWorkflowMode === "local" ? "local" : "ai";
-  autoDownloadInLocal = saved.autoDownloadInLocal !== false;
   if (Array.isArray(saved.exportFormats) && saved.exportFormats.length > 0) {
     const valid = saved.exportFormats.filter((f) => f === "png" || f === "pdf");
     if (valid.length > 0) {
@@ -176,8 +168,8 @@ captureButton.addEventListener("click", async () => {
       throw new Error("长截图结果无效，请重新截取。");
     }
 
-    if (workflowMode === "local" &&
-        autoDownloadInLocal &&
+    if (popupUiMode === "detailed" &&
+        workflowMode === "local" &&
         typeof QuestionExporter !== "undefined" &&
         typeof result.dataUrl === "string" &&
         Array.isArray(result.localDetections) &&
@@ -235,13 +227,6 @@ for (const radio of modeRadios) {
     workflowMode = radio.value === "local" ? "local" : "ai";
     updateControlsUi();
     await chrome.storage?.local?.set?.({ defaultWorkflowMode: workflowMode }).catch(() => {});
-  });
-}
-
-if (autoDownloadCheckbox) {
-  autoDownloadCheckbox.addEventListener("change", async () => {
-    autoDownloadInLocal = autoDownloadCheckbox.checked;
-    await chrome.storage?.local?.set?.({ autoDownloadInLocal }).catch(() => {});
   });
 }
 
