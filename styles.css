@@ -440,6 +440,11 @@ button:disabled {
   color: #cf222e;
 }
 
+.status-needs_recrop {
+  background: #fff8c5;
+  color: #9a6700;
+}
+
 .question-text {
   margin: 12px 0;
   white-space: pre-wrap;

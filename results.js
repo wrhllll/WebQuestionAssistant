@@ -66,6 +66,7 @@ function questionStatusLabel(status) {
     pending: "等待解答",
     solving: "正在解答",
     complete: "已完成",
+    needs_recrop: "需重框",
     error: "失败",
     cancelled: "已取消"
   }[status] || "等待解答";
@@ -184,7 +185,7 @@ function createQuestionCard(question, index) {
     details.append(error);
   }
 
-  if (question.status === "error" || question.status === "cancelled") {
+  if (question.status === "error" || question.status === "cancelled" || question.status === "needs_recrop") {
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "secondary-button retry-question";
@@ -228,6 +229,7 @@ function renderRecord() {
   renderCropEditorBoxes();
   const completeCount = questions.filter((question) => question.status === "complete").length;
   const errorCount = questions.filter((question) => question.status === "error").length;
+  const recropCount = questions.filter((question) => question.status === "needs_recrop").length;
   const remainingCount = questions.filter((question) =>
     question.status === "pending" || question.status === "cancelled"
   ).length;
@@ -257,9 +259,14 @@ function renderRecord() {
       }
       retryButton.hidden = true;
     } else if (record.status === "complete") {
-      setStatus(errorCount
-        ? `逐题解答结束：${completeCount} 题成功，${errorCount} 题失败。可重试失败题目。`
-        : `逐题解答完成：共 ${completeCount} 题。`);
+      if (errorCount || recropCount) {
+        const parts = [`${completeCount} 题成功`];
+        if (recropCount) parts.push(`${recropCount} 题需重框`);
+        if (errorCount) parts.push(`${errorCount} 题失败`);
+        setStatus(`逐题解答结束：${parts.join("，")}。可对异常题目重新框选或重试。`);
+      } else {
+        setStatus(`逐题解答完成：共 ${completeCount} 题。`);
+      }
       retryButton.hidden = errorCount === 0 && remainingCount === 0;
     } else if (record.status === "cancelled") {
       setStatus(`已取消后续解答：${completeCount} 题完成，可继续处理剩余题目。`);
@@ -1264,6 +1271,46 @@ function startWaitTimer(baseMessage, solvingQuestionId = "") {
   activeWaitTimer = setInterval(update, 1000);
 }
 
+function assessLocalDetectionsConfidence(detections, imageWidth, imageHeight) {
+  if (!Array.isArray(detections) || detections.length === 0) {
+    return { confident: false, reason: "未检测到题目块" };
+  }
+  const rects = detections.map((d) => d.stemRect || d);
+  if (rects.length === 1 && imageHeight > 1400 && rects[0].height > imageHeight * 0.8) {
+    return { confident: false, reason: "仅检测到整页级大区域，疑似扫描图或整页容器" };
+  }
+  const tinyCount = rects.filter((r) => r.height < 42 && r.width < 220).length;
+  if (tinyCount > rects.length / 2) {
+    return { confident: false, reason: "检测到的区域普遍过小" };
+  }
+  return { confident: true, reason: "" };
+}
+
+function parseCropQualityFlag(answerText) {
+  const trimmed = String(answerText || "").trim();
+  const notQuestionMatch = /^\[NOT_A_QUESTION\]\s*[:：-]?\s*([\s\S]*)$/i.exec(trimmed);
+  if (notQuestionMatch) {
+    const detail = (notQuestionMatch[1] || "").trim();
+    return {
+      flagged: true,
+      message: detail
+        ? `模型判定此截图非题目区域：${detail}（可点击“重新框选并重新解答”或删除本题）`
+        : "模型判定此截图非题目区域，请点击“重新框选并重新解答”或删除本题。"
+    };
+  }
+  const incompleteMatch = /^\[INCOMPLETE_CROP\]\s*[:：-]?\s*([\s\S]*)$/i.exec(trimmed);
+  if (incompleteMatch) {
+    const detail = (incompleteMatch[1] || "").trim();
+    return {
+      flagged: true,
+      message: detail
+        ? `模型判定本题裁切不完整：${detail}（请点击“重新框选并重新解答”）`
+        : "模型判定本题裁切不完整（缺少关键题干、选项或图表），请点击“重新框选并重新解答”。"
+    };
+  }
+  return { flagged: false, message: "" };
+}
+
 function createLocalizationImageData(sourceImage) {
   const maxWidth = 1280;
   const maxHeight = 4096;
@@ -1423,7 +1470,13 @@ async function solveQuestions(api, signal, questionIds) {
       const solved = await chatCompletion(api, [
         {
           type: "text",
-          text: `请只解答截图中这一道题，用中文清晰说明步骤。不要猜测其他题目，也不要把多道题合并。用户补充说明：${record.instruction || "无"}`
+          text: [
+            "请先判断这张截图是否包含一道完整、可读的练习题/考试题：",
+            "- 如果截图不是题目（例如页眉、导航、纯标题或无关说明），不要猜测作答，请严格以 [NOT_A_QUESTION] 开头，用一句话说明原因。",
+            "- 如果题目明显被截断、缺少关键题干/选项/图表导致无法可靠解答，不要强行编造答案，请严格以 [INCOMPLETE_CROP] 开头，用一句话说明缺失了哪部分。",
+            "- 如果是完整题目，请直接用中文清晰说明解题步骤，不要猜测或合并其他题目。",
+            `用户补充说明：${record.instruction || "无"}`
+          ].join("\n")
         },
         { type: "image_url", image_url: { url: question.imageData } }
       ], signal, {
@@ -1431,11 +1484,21 @@ async function solveQuestions(api, signal, questionIds) {
         onChunk: updateLiveStreamDom
       });
       stopWaitTimer();
-      question.status = "complete";
-      question.answer = typeof solved === "string" ? solved : solved.answer;
-      question.reasoning = typeof solved === "string" ? "" : (solved.reasoning || "");
-      question.error = "";
-      question.completedAt = Date.now();
+      const rawAnswer = typeof solved === "string" ? solved : solved.answer;
+      const rawReasoning = typeof solved === "string" ? "" : (solved.reasoning || "");
+      const qualityCheck = parseCropQualityFlag(rawAnswer);
+      if (qualityCheck.flagged) {
+        question.status = "needs_recrop";
+        question.answer = "";
+        question.reasoning = rawReasoning;
+        question.error = qualityCheck.message;
+      } else {
+        question.status = "complete";
+        question.answer = rawAnswer;
+        question.reasoning = rawReasoning;
+        question.error = "";
+        question.completedAt = Date.now();
+      }
       await saveRecord({
         status: "solving",
         activeQuestionId: "",
@@ -1774,13 +1837,20 @@ async function loadRecord() {
     if (record.status === "captured") {
       if (initialMode === "local" || record.mode === "local") {
         await applyLocalDetections();
-      } else if (Array.isArray(record.localDetections) && record.localDetections.length > 0) {
-        await applyLocalDetections();
-        if (record.questions?.length > 0) {
-          setStatus(`已在本地秒级框选出 ${record.questions.length} 道题目（跳过耗时的整页视觉定位）。检查后点击“确认并逐题求解”，或点击“重新识别”改用视觉模型。`);
-        }
       } else {
-        await startRecognition();
+        const check = assessLocalDetectionsConfidence(
+          record.localDetections,
+          record.width,
+          record.height
+        );
+        if (check.confident) {
+          await applyLocalDetections();
+          if (record.questions?.length > 0) {
+            setStatus(`已在本地秒级框选出 ${record.questions.length} 道题目（跳过耗时的整页视觉定位）。检查后点击“确认并逐题求解”，或点击“重新识别”改用视觉模型。`);
+          }
+        } else {
+          await startRecognition();
+        }
       }
     }
   } catch (error) {
